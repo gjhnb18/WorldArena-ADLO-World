@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>WorldArena Track 1 · Transfer / Control-Video-to-Video</title>
+  <link rel="stylesheet" href="route_explainer.css">
+</head>
+<body class="transfer">
+  <div class="progress" aria-hidden="true"><i></i></div>
+  <header class="masthead">
+    <div class="brand">WorldArena Track 1 · Dual-stream Observatory</div>
+    <a class="route-switch" href="WorldArena_Track1_FD.html">FD 路线 <span aria-hidden="true">↗</span></a>
+  </header>
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a href="#cover"><span>00 / Route</span></a>
+    <a href="#overview"><span>01 / System</span></a>
+    <a href="#renderer"><span>02 / Renderer</span></a>
+    <a href="#pair"><span>03 / Pair</span></a>
+    <a href="#architecture"><span>04 / Architecture</span></a>
+    <a href="#attention"><span>05 / Attention + Loss</span></a>
+    <a href="#sampling"><span>06 / CFG</span></a>
+    <a href="#ar"><span>07 / AR rollout</span></a>
+    <a href="#result"><span>08 / Handoff</span></a>
+  </nav>
+  <div class="controls" aria-label="演示控制">
+    <button data-prev title="上一节">↑</button>
+    <button data-next title="下一节">↓</button>
+    <button data-fullscreen title="全屏（F）">⛶</button>
+    <button data-print title="打印 / 导出 PDF">⌁</button>
+  </div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#81919a"/></marker>
+      <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#6d55d9"/></marker>
+      <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#009fbd"/></marker>
+      <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".3"/></filter>
+    </defs>
+  </svg>
+
+  <main>
+    <section class="scene dual-hero dark" id="cover" data-index="00 — TRANSFER">
+      <div class="hero-copy">
+        <p class="eyebrow" data-animate>Control-video-to-video</p>
+        <h1 data-animate="delay-1">WorldArena<br>Track 1 <em>Transfer</em></h1>
+        <p class="lede" data-animate="delay-2">先把 EEF 轨迹投影为 2D 控制视频，再把 control 与 target 作为两个对齐的视觉项交给同一个 Cosmos3-Nano。它不是 ControlNet，而是 in-context visual conditioning。</p>
+        <div class="hero-meta" data-animate="delay-3">
+          <div><b>97</b><span>RGB frames / window</span></div>
+          <div><b>25 + 25</b><span>paired latent frames</span></div>
+          <div><b>96</b><span>AR stride</span></div>
+        </div>
+      </div>
+      <div class="dual-stage" data-animate="delay-2" aria-label="同步 control 与 target 输出预览">
+        <div class="dual-frame">
+          <div class="dual-pane" data-label="CONTROL / EEF PROJECTION"><img id="hero-control" src="assets/demos/transfer593_control_04.png" alt="第4个时刻的控制视频帧"></div>
+          <div class="dual-pane" data-label="TARGET / GENERATED WORLD"><img id="hero-output" src="assets/demos/transfer593_generated_04.png" alt="第4个时刻的生成输出帧"></div>
+          <div class="sync-cursor" aria-hidden="true"></div>
+        </div>
+        <label class="scrubber"><span>SYNC TIME</span><input id="hero-scrub" type="range" min="1" max="6" value="4" step="1" aria-label="同步浏览 control 和 output 帧"><output id="hero-time">t₄</output></label>
+      </div>
+    </section>
+
+    <section class="scene split dark" id="overview" data-index="01 — SYSTEM">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Projected control as a visual language</p>
+        <h2 data-animate="delay-1">两条视觉轨，<br>在<span style="color:var(--accent-2)">同一时间轴</span>汇合</h2>
+        <p data-animate="delay-2">绝对 EEF 状态先经过固定相机几何变成黑底 control raster。训练将 control 和真实 RGB 同步解码；推理则用 WorldArena 轨迹生成 control，再让模型补全外观和动力学。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>25k</b><span>SFT iterations</span></div>
+          <div class="metric"><b>35</b><span>UniPC steps</span></div>
+          <div class="metric"><b>736×544</b><span>model output</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">Control 指定“末端应该在哪里、朝向如何、是否抓取”；模型负责把这些符号翻译成连贯的真实世界视频。</p>
+        <p class="source">transfer_robotwin_nano.py:4-31,175-251 · transfer_robotwin_repro.toml:25-66 · build_transfer_inputs.py:91-168</p>
+      </div>
+      <div class="figure paired-rails" data-animate="delay-1">
+        <span class="figure-label">Figure 01 · two synchronized streams</span>
+        <div class="rail-labels"><span>CONTROL STREAM</span><span>TARGET STREAM</span></div>
+        <svg viewBox="0 0 930 650" role="img" aria-label="Transfer 从 EEF 控制到生成视频的双流系统图">
+          <rect x="48" y="55" width="300" height="85" rx="8" fill="#ffffff0b" stroke="#009fbd"/>
+          <text x="198" y="88" text-anchor="middle" class="label inverse" fill="#fff">T×16 absolute EEF</text><text x="198" y="116" text-anchor="middle" class="small inverse" fill="#fff">one state row → one control frame</text>
+          <rect x="582" y="55" width="300" height="85" rx="8" fill="#ffffff0b" stroke="#6d55d9"/>
+          <text x="732" y="88" text-anchor="middle" class="label inverse" fill="#fff">GT RGB during SFT</text><text x="732" y="116" text-anchor="middle" class="small inverse" fill="#fff">generated RGB during Track1</text>
+          <path d="M198 144V194" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/><path d="M732 144V194" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="48" y="198" width="300" height="108" rx="8" fill="#009fbd1b" stroke="#009fbd"/>
+          <text x="198" y="235" text-anchor="middle" class="label inverse" fill="#fff">D435 pinhole renderer</text><text x="198" y="260" text-anchor="middle" class="small inverse" fill="#fff">position · depth · grip · orientation · trail</text><text x="198" y="285" text-anchor="middle" class="micro" fill="#63e0f3">640×480 control raster</text>
+          <rect x="582" y="198" width="300" height="108" rx="8" fill="#6d55d91b" stroke="#6d55d9"/>
+          <text x="732" y="235" text-anchor="middle" class="label inverse" fill="#fff">first-frame appearance</text><text x="732" y="260" text-anchor="middle" class="small inverse" fill="#fff">x₀ is the clean target anchor</text><text x="732" y="285" text-anchor="middle" class="micro" fill="#a99cff">future is reconstructed / sampled</text>
+          <path d="M198 310V360" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/><path d="M732 310V360" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <path d="M198 339C198 368 385 378 433 390" fill="none" stroke="#009fbd" stroke-width="2"/>
+          <path d="M732 339C732 368 545 378 497 390" fill="none" stroke="#6d55d9" stroke-width="2"/>
+          <rect x="332" y="366" width="266" height="143" rx="15" fill="#fff" filter="url(#soft-shadow)"/>
+          <text x="465" y="408" text-anchor="middle" class="label">Cosmos3-Nano</text><text x="465" y="434" text-anchor="middle" class="small">shared VAE · shared MoT</text>
+          <rect x="378" y="459" width="174" height="28" rx="14" fill="#28204d"/><text x="465" y="477" text-anchor="middle" class="micro inverse" fill="#fff">[control, target]</text>
+          <path d="M465 513V560" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="332" y="564" width="266" height="62" rx="8" fill="#6d55d927" stroke="#6d55d9"/>
+          <text x="465" y="602" text-anchor="middle" class="label inverse" fill="#fff">97-frame AR → exact-T mp4</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene split dark" id="renderer" data-index="02 — RENDERER">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Control renderer laboratory</p>
+        <h2 data-animate="delay-1">3D EEF 状态变成<br><span style="color:var(--accent-2)">可学习的 2D 符号</span></h2>
+        <p data-animate="delay-2">WXYZ 位姿经固定 D435 外参和 pinhole 投影落到 camera plane。圆盘中心编码位置，半径编码相对深度，亮度/透明度编码 grasp，RGB gizmo 编码朝向，轨迹显示未来 [t,t+25]。</p>
+        <p class="takeaway" data-animate="delay-3">它不是 segmentation mask，也不是 learned feature map；它是人为设计、跨训练和 Track1 复用的视觉语言。</p>
+        <p class="source">visualize_ee_projection.py:53-63,97-160,330-433 · batch_control_videos_test.py:78-87,112-158</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 02 · interactive camera projection</span>
+        <svg id="renderer-svg" viewBox="0 0 960 620" role="img" aria-label="EEF 从世界坐标到相机平面的投影实验图">
+          <text x="28" y="42" class="micro accent2" fill="#009fbd">WORLD / WXYZ</text><text x="355" y="42" class="micro accent2" fill="#009fbd">PINHOLE CAMERA</text><text x="675" y="42" class="micro accent2" fill="#009fbd">CONTROL RASTER</text>
+          <rect x="28" y="67" width="270" height="275" rx="9" fill="#ffffff08" stroke="#ffffff20"/>
+          <path d="M76 292V153M76 292H222M76 292L41 249" stroke="#fff" stroke-width="2" opacity=".65"/>
+          <text x="72" y="142" class="micro" fill="#53dd8b">Y</text><text x="229" y="299" class="micro" fill="#ff6b6b">X</text><text x="31" y="245" class="micro" fill="#65a7ff">Z</text>
+          <circle cx="187" cy="139" r="26" fill="#28c267"/><text x="187" y="144" text-anchor="middle" class="mono inverse" fill="#fff">L</text>
+          <circle cx="245" cy="226" r="26" fill="#ef5454"/><text x="245" y="231" text-anchor="middle" class="mono inverse" fill="#fff">R</text>
+          <text x="163" y="319" text-anchor="middle" class="mono inverse" fill="#fff">[xyz, q_wxyz, grip] ×2</text>
+
+          <path d="M302 204H353" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/>
+          <rect x="357" y="67" width="260" height="275" rx="9" fill="#ffffff08" stroke="#ffffff20"/>
+          <path d="M396 170L438 148V261L396 239Z" fill="#41596c"/><rect x="438" y="178" width="25" height="55" rx="4" fill="#8fa6b6"/>
+          <path id="ray-l" d="M463 188L578 119" stroke="#28c267" stroke-width="2"/><path id="ray-r" d="M463 222L578 277" stroke="#ef5454" stroke-width="2"/>
+          <path d="M578 92V302" stroke="#009fbd" stroke-width="4"/><path d="M562 92H594M562 302H594" stroke="#009fbd" stroke-width="2"/>
+          <text x="487" y="316" text-anchor="middle" class="mono inverse" fill="#fff">p_cam = R p_world + t</text><text x="487" y="334" text-anchor="middle" class="micro inverse" fill="#fff">u=fx·X/Z+cx · v=fy·Y/Z+cy</text>
+
+          <path d="M621 204H672" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/>
+          <rect x="676" y="67" width="256" height="275" fill="#000" stroke="#ffffff25"/>
+          <polyline id="future-trail" points="699,267 726,251 751,231 780,203 807,176" fill="none" stroke="#28c267" stroke-width="3" opacity=".55"/>
+          <circle id="control-disk" cx="807" cy="176" r="38" fill="#28c267" fill-opacity=".85"/>
+          <circle cx="807" cy="176" r="4" fill="#fff"/>
+          <path d="M807 176L850 176" stroke="#ff4747" stroke-width="4"/><path d="M807 176L807 132" stroke="#45e565" stroke-width="4"/><path d="M807 176L784 199" stroke="#4e92ff" stroke-width="4"/>
+          <text x="804" y="323" text-anchor="middle" class="micro inverse" fill="#fff">center · depth · grasp · XYZ gizmo</text>
+
+          <rect x="28" y="393" width="904" height="127" rx="9" fill="#ffffff07" stroke="#ffffff1c"/>
+          <text x="54" y="425" class="micro accent2" fill="#009fbd">VISUAL CODE</text>
+          <circle cx="67" cy="464" r="9" fill="#28c267"/><text x="89" y="468" class="small inverse" fill="#fff">left green</text>
+          <circle cx="198" cy="464" r="9" fill="#ef5454"/><text x="220" y="468" class="small inverse" fill="#fff">right red</text>
+          <circle cx="347" cy="464" r="16" fill="#28c267" opacity=".5"/><circle cx="347" cy="464" r="4" fill="#fff"/><text x="376" y="468" class="small inverse" fill="#fff">near → larger (22–72 px)</text>
+          <text x="617" y="468" class="small inverse" fill="#fff">grip=0 / closed → brighter + more opaque</text>
+          <text x="54" y="500" class="micro" fill="#ffffff88">D435 vertical FOV 37° · fixed head-camera pose · one state row per rendered frame</text>
+        </svg>
+        <div class="lab-controls">
+          <label>DEPTH / DISK RADIUS<input id="depth" type="range" min="22" max="72" value="38" aria-label="控制投影圆盘半径"></label>
+          <label>GRIP / CLOSED SALIENCE<input id="grip" type="range" min="0" max="100" value="85" aria-label="控制抓取亮度和透明度"></label>
+          <button id="trail-toggle" type="button" aria-pressed="true">future trail [t,t+25] · ON</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene split dark" id="pair" data-index="03 — TRAINING PAIR">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Synchronized training pair</p>
+        <h2 data-animate="delay-1">同一时刻，<br>两种<span style="color:var(--accent-2)">视觉表达</span></h2>
+        <p data-animate="delay-2">Control 与 target 使用同一帧索引同步解码，并通过相同的 resize-to-cover 和 center crop。97 个 RGB frame 经共享 Wan2.2 VAE 变成 25 个对齐 latent time steps。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>97 → 25</b><span>RGB to latent frames</span></div>
+          <div class="metric"><b>4:3</b><span>480 tier geometry</span></div>
+          <div class="metric"><b>2 / rank</b><span>paired samples under FSDP</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">对齐误差会直接变成 supervision conflict：控制符号说“这里”，真实视频却在另一个时间或像素位置。</p>
+        <p class="source">robotwin_transfer_dataset.py:288-339 · transfer_control_transform.py:124-195 · utils.py:41-54</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 03 · locked control / target time</span>
+        <div class="cinema-pair">
+          <div class="cinema-row"><b>CONTROL<br>clean ×97</b><img src="assets/demos/transfer593_control_01.png" alt="control 1"><img src="assets/demos/transfer593_control_02.png" alt="control 2"><img src="assets/demos/transfer593_control_03.png" alt="control 3"><img src="assets/demos/transfer593_control_04.png" alt="control 4"><img src="assets/demos/transfer593_control_05.png" alt="control 5"><img src="assets/demos/transfer593_control_06.png" alt="control 6"></div>
+          <div class="cinema-row target"><b>TARGET<br>RGB ×97</b><img src="assets/demos/transfer593_generated_01.png" alt="target 1"><img src="assets/demos/transfer593_generated_02.png" alt="target 2"><img src="assets/demos/transfer593_generated_03.png" alt="target 3"><img src="assets/demos/transfer593_generated_04.png" alt="target 4"><img src="assets/demos/transfer593_generated_05.png" alt="target 5"><img src="assets/demos/transfer593_generated_06.png" alt="target 6"></div>
+        </div>
+        <svg viewBox="0 0 960 360" role="img" aria-label="两条视频流进入共享VAE并对齐为25个latent时间点">
+          <path d="M120 60H850" stroke="#ffffff22" stroke-width="2"/><path d="M120 190H850" stroke="#ffffff22" stroke-width="2"/>
+          <text x="42" y="65" class="micro accent2" fill="#009fbd">CTRL</text><text x="42" y="195" class="micro accent" fill="#6d55d9">TGT</text>
+          <g fill="#009fbd"><rect x="120" y="43" width="22" height="34"/><rect x="151" y="43" width="22" height="34"/><rect x="182" y="43" width="22" height="34"/><rect x="213" y="43" width="22" height="34"/><rect x="244" y="43" width="22" height="34"/><rect x="275" y="43" width="22" height="34"/><rect x="306" y="43" width="22" height="34"/><rect x="337" y="43" width="22" height="34"/><rect x="368" y="43" width="22" height="34"/><rect x="399" y="43" width="22" height="34"/><rect x="430" y="43" width="22" height="34"/><rect x="461" y="43" width="22" height="34"/><rect x="492" y="43" width="22" height="34"/><rect x="523" y="43" width="22" height="34"/><rect x="554" y="43" width="22" height="34"/><rect x="585" y="43" width="22" height="34"/><rect x="616" y="43" width="22" height="34"/><rect x="647" y="43" width="22" height="34"/><rect x="678" y="43" width="22" height="34"/><rect x="709" y="43" width="22" height="34"/><rect x="740" y="43" width="22" height="34"/><rect x="771" y="43" width="22" height="34"/><rect x="802" y="43" width="22" height="34"/><rect x="833" y="43" width="22" height="34"/></g>
+          <g fill="#6d55d9"><rect x="120" y="173" width="22" height="34"/><rect x="151" y="173" width="22" height="34"/><rect x="182" y="173" width="22" height="34"/><rect x="213" y="173" width="22" height="34"/><rect x="244" y="173" width="22" height="34"/><rect x="275" y="173" width="22" height="34"/><rect x="306" y="173" width="22" height="34"/><rect x="337" y="173" width="22" height="34"/><rect x="368" y="173" width="22" height="34"/><rect x="399" y="173" width="22" height="34"/><rect x="430" y="173" width="22" height="34"/><rect x="461" y="173" width="22" height="34"/><rect x="492" y="173" width="22" height="34"/><rect x="523" y="173" width="22" height="34"/><rect x="554" y="173" width="22" height="34"/><rect x="585" y="173" width="22" height="34"/><rect x="616" y="173" width="22" height="34"/><rect x="647" y="173" width="22" height="34"/><rect x="678" y="173" width="22" height="34"/><rect x="709" y="173" width="22" height="34"/><rect x="740" y="173" width="22" height="34"/><rect x="771" y="173" width="22" height="34"/><rect x="802" y="173" width="22" height="34"/><rect x="833" y="173" width="22" height="34"/></g>
+          <g stroke="#ffffff28" stroke-width="1"><path d="M131 80V170"/><path d="M286 80V170"/><path d="M441 80V170"/><path d="M596 80V170"/><path d="M751 80V170"/><path d="M844 80V170"/></g>
+          <text x="488" y="245" text-anchor="middle" class="mono inverse" fill="#fff">shared temporal mRoPE IDs: 0, 1, 2, …, 24</text>
+          <rect x="237" y="281" width="502" height="48" rx="24" fill="#ffffff0c" stroke="#ffffff28"/><text x="488" y="311" text-anchor="middle" class="small inverse" fill="#fff">same VAE · same spatial crop · same latent grid</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene wide-scene dark" id="architecture" data-index="04 — MODEL">
+      <div class="wide-head">
+        <div>
+          <p class="eyebrow" data-animate>Full in-context architecture</p>
+          <h2 data-animate="delay-1" style="color:#fff">Transfer 模型：两条 vision item，共享一套生成栈</h2>
+        </div>
+        <div data-animate="delay-2">
+          <p style="color:rgba(255,255,255,.62)">Control 没有旁路网络。它和 target 一起经过共享 VAE、vae2llm、36 层 MoT；只有 target future 通过 llm2vae 预测速度并承担 loss。</p>
+          <div class="legend"><span><i></i>target / generation</span><span><i></i>control / context</span><span><i></i>shared frozen backbone</span></div>
+        </div>
+      </div>
+      <div class="wide-figure" data-animate="delay-1">
+        <svg viewBox="0 0 1480 650" role="img" aria-label="Transfer两个视觉项共享VAE和MoT的完整模型结构">
+          <text x="28" y="42" class="micro accent2" fill="#009fbd">INPUTS</text><text x="300" y="42" class="micro accent2" fill="#009fbd">SHARED ENCODER</text><text x="590" y="42" class="micro accent2" fill="#009fbd">PACKED SEQUENCE</text><text x="913" y="42" class="micro accent2" fill="#009fbd">SHARED BACKBONE</text><text x="1241" y="42" class="micro accent2" fill="#009fbd">TARGET HEAD</text>
+          <path d="M28 57H1452" stroke="#ffffff1f"/>
+          <rect x="28" y="89" width="210" height="72" rx="7" fill="#ffffff08" stroke="#ffffff25"/><text x="50" y="119" class="label inverse" fill="#fff">Instruction</text><text x="50" y="143" class="small inverse" fill="#fff">text / embodiment context</text>
+          <rect x="28" y="198" width="210" height="124" rx="7" fill="#009fbd16" stroke="#009fbd"/><image href="assets/demos/transfer593_control_04.png" x="40" y="210" width="88" height="66"/><text x="184" y="239" text-anchor="middle" class="label inverse" fill="#fff">Control</text><text x="184" y="263" text-anchor="middle" class="small inverse" fill="#fff">97f clean</text><text x="50" y="303" class="micro" fill="#51d6ed">visual context item 0</text>
+          <rect x="28" y="359" width="210" height="124" rx="7" fill="#6d55d916" stroke="#6d55d9"/><image href="assets/demos/transfer593_generated_01.png" x="40" y="371" width="88" height="66"/><text x="184" y="400" text-anchor="middle" class="label inverse" fill="#fff">Target</text><text x="184" y="424" text-anchor="middle" class="small inverse" fill="#fff">97f · anchor x₀</text><text x="50" y="464" class="micro" fill="#aa9cff">visual item 1 / loss target</text>
+
+          <path d="M242 125H294" stroke="#8b9aa2" marker-end="url(#arrow)"/><path d="M242 260H294" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/><path d="M242 421H294" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="298" y="89" width="210" height="72" rx="7" fill="#ffffff08" stroke="#ffffff25"/><text x="403" y="121" text-anchor="middle" class="label inverse" fill="#fff">text embedding</text><text x="403" y="145" text-anchor="middle" class="small inverse" fill="#fff">shared hidden size 4096</text>
+          <rect x="298" y="198" width="210" height="285" rx="10" fill="#ffffff08" stroke="#ffffff25"/>
+          <text x="403" y="235" text-anchor="middle" class="label inverse" fill="#fff">shared Wan2.2 VAE</text><text x="403" y="261" text-anchor="middle" class="small inverse" fill="#fff">97 RGB → 25 latent frames</text>
+          <rect x="326" y="291" width="154" height="51" rx="6" fill="#009fbd25" stroke="#009fbd"/><text x="403" y="321" text-anchor="middle" class="mono inverse" fill="#fff">C₀…C₂₄ · clean</text>
+          <rect x="326" y="360" width="154" height="51" rx="6" fill="#6d55d925" stroke="#6d55d9"/><text x="403" y="390" text-anchor="middle" class="mono inverse" fill="#fff">T₀ | T₁…T₂₄</text>
+          <text x="403" y="451" text-anchor="middle" class="micro inverse" fill="#fff">patchify → vae2llm</text>
+
+          <path d="M512 125H576" stroke="#8b9aa2" marker-end="url(#arrow)"/><path d="M512 340H576" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/><path d="M512 407H576" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="580" y="89" width="276" height="394" rx="12" fill="#ffffff08" stroke="#ffffff25"/>
+          <text x="608" y="122" class="label inverse" fill="#fff">[ text | control | target ]</text><text x="608" y="146" class="small inverse" fill="#fff">one attention graph</text>
+          <rect x="608" y="184" width="220" height="38" rx="4" fill="#dce8ee"/><text x="718" y="203" class="token-text">TEXT TOKENS</text>
+          <g fill="#009fbd"><rect x="608" y="239" width="35" height="97"/><rect x="650" y="239" width="35" height="97"/><rect x="692" y="239" width="35" height="97"/><rect x="734" y="239" width="35" height="97"/><rect x="776" y="239" width="52" height="97"/></g><text x="718" y="281" class="token-text inverse" fill="#fff">CONTROL ×25</text><text x="718" y="305" class="token-text inverse" fill="#fff">ALL CLEAN</text>
+          <rect x="608" y="353" width="35" height="97" fill="#6d55d9"/><g fill="#aa9cff" opacity=".65"><rect x="650" y="353" width="35" height="97"/><rect x="692" y="353" width="35" height="97"/><rect x="734" y="353" width="35" height="97"/><rect x="776" y="353" width="52" height="97"/></g><text x="718" y="395" class="token-text inverse" fill="#fff">TARGET</text><text x="718" y="419" class="token-text inverse" fill="#fff">1 CLEAN + 24 NOISY</text>
+          <text x="608" y="471" class="micro" fill="#51d6ed">shared temporal mRoPE: Cᵢ ↔ Tᵢ</text>
+
+          <path d="M860 286H916" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <g opacity=".24"><rect x="936" y="111" width="265" height="354" rx="16" fill="#6d55d9"/><rect x="926" y="101" width="265" height="354" rx="16" fill="#ffffff0c" stroke="#ffffff35"/></g>
+          <rect x="916" y="91" width="265" height="354" rx="16" fill="#171525" stroke="#ffffff32" filter="url(#soft-shadow)"/>
+          <text x="1048" y="135" text-anchor="middle" class="label inverse" fill="#fff">Cosmos3-Nano MoT</text><text x="1048" y="159" text-anchor="middle" class="small inverse" fill="#fff">36 layers · hidden 4096</text>
+          <rect x="950" y="193" width="197" height="47" rx="7" fill="#ffffff0c"/><text x="1048" y="222" text-anchor="middle" class="mono inverse" fill="#fff">two-way joint attention</text>
+          <rect x="950" y="255" width="197" height="47" rx="7" fill="#ffffff0c"/><text x="1048" y="284" text-anchor="middle" class="mono inverse" fill="#fff">shared temporal mRoPE</text>
+          <rect x="950" y="317" width="197" height="47" rx="7" fill="#ffffff0c"/><text x="1048" y="346" text-anchor="middle" class="mono inverse" fill="#fff">generation MLP / FFN</text>
+          <text x="1048" y="404" text-anchor="middle" class="micro" fill="#aa9cff">dense FFN</text><text x="1048" y="425" text-anchor="middle" class="micro" fill="#aa9cff">key: *_moe_gen</text>
+
+          <path d="M1185 273H1237" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="1241" y="218" width="210" height="108" rx="8" fill="#6d55d91e" stroke="#6d55d9"/>
+          <text x="1346" y="254" text-anchor="middle" class="label inverse" fill="#fff">llm2vae</text><text x="1346" y="280" text-anchor="middle" class="small inverse" fill="#fff">target future tokens only</text><text x="1346" y="305" text-anchor="middle" class="micro" fill="#aa9cff">velocity field vθ</text>
+          <path d="M1346 330V372" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="1241" y="376" width="210" height="107" rx="8" fill="#ffffff08" stroke="#ffffff25"/>
+          <text x="1346" y="412" text-anchor="middle" class="label inverse" fill="#fff">Wan VAE decode</text><text x="1346" y="438" text-anchor="middle" class="small inverse" fill="#fff">736×544 RGB future</text><text x="1346" y="462" text-anchor="middle" class="micro" fill="#51d6ed">control is never decoded</text>
+
+          <rect x="298" y="535" width="1153" height="71" rx="7" fill="#ffffff07" stroke="#ffffff1f"/>
+          <text x="326" y="565" class="micro accent2" fill="#009fbd">TRAINABLE</text><text x="326" y="587" class="mono inverse" fill="#fff">*_moe_gen · time_embedder · vae2llm · llm2vae</text>
+          <text x="978" y="565" class="micro accent" fill="#6d55d9">SFT</text><text x="978" y="587" class="mono inverse" fill="#fff">BF16 · 8-way FSDP · LR 2e−4 · 25k iter</text>
+        </svg>
+      </div>
+      <p class="source">transfer_robotwin_nano.py:84-115,175-251 · packers.py:291-335 · Qwen3-VL-8B-Instruct.json:15-21</p>
+    </section>
+
+    <section class="scene split dark" id="attention" data-index="05 — ATTENTION + LOSS">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Visibility and supervision</p>
+        <h2 data-animate="delay-1">Control 全 clean，<br>loss 只属于<span style="color:var(--accent-2)"> target future</span></h2>
+        <p data-animate="delay-2">Text query 只读取 causal text；control 与 target 作为 generation query 可读取完整的 text/control/target context。Condition mask 中 1 表示 clean，flow loss 使用其补集。</p>
+        <p data-animate="delay-2">训练存在 10% caption dropout，但没有显式 control-item dropout；无 control 分支是在推理期为 control-CFG 构造。</p>
+        <p class="takeaway" data-animate="delay-3">模型不会重建 control。它只把 control 当作时空参照，预测 target noisy future 的速度。</p>
+        <p class="source">attention.py:88-145 · rectified_flow.py:176-210 · flow_matching.py:18-90 · transfer_transforms.py:53-93</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 05 · attention matrix + loss mask</span>
+        <svg viewBox="0 0 960 700" role="img" aria-label="Transfer注意力可见性和target-only flow loss">
+          <text x="45" y="48" class="micro accent2" fill="#009fbd">A · QUERY × KEY / VALUE</text>
+          <text x="191" y="91" class="micro inverse" fill="#fff">TEXT</text><text x="300" y="91" class="micro inverse" fill="#fff">CONTROL</text><text x="413" y="91" class="micro inverse" fill="#fff">TARGET</text>
+          <text x="69" y="160" class="micro inverse" fill="#fff">TEXT</text><text x="57" y="267" class="micro inverse" fill="#fff">CONTROL</text><text x="62" y="377" class="micro inverse" fill="#fff">TARGET</text>
+          <g transform="translate(145 108)">
+            <rect width="96" height="96" fill="#6d55d9"/><path d="M7 89L89 7" stroke="#fff" stroke-width="2"/><text x="48" y="52" class="token-text inverse" fill="#fff">CAUSAL</text>
+            <rect x="109" width="96" height="96" fill="#ffffff12"/><text x="157" y="52" class="token-text inverse" fill="#fff">×</text><rect x="218" width="96" height="96" fill="#ffffff12"/><text x="266" y="52" class="token-text inverse" fill="#fff">×</text>
+            <rect y="109" width="96" height="96" fill="#009fbd"/><rect x="109" y="109" width="96" height="96" fill="#009fbd"/><rect x="218" y="109" width="96" height="96" fill="#009fbd"/>
+            <rect y="218" width="96" height="96" fill="#6d55d9"/><rect x="109" y="218" width="96" height="96" fill="#6d55d9"/><rect x="218" y="218" width="96" height="96" fill="#6d55d9"/>
+            <text x="157" y="161" class="token-text inverse" fill="#fff">FULL</text><text x="157" y="270" class="token-text inverse" fill="#fff">FULL</text>
+          </g>
+          <text x="145" y="456" class="small inverse" fill="#fff">generation queries jointly attend to both visual items</text>
+
+          <text x="547" y="48" class="micro accent2" fill="#009fbd">B · CONDITION / LOSS MASKS</text>
+          <text x="547" y="93" class="micro" fill="#51d6ed">CONTROL LATENT · 25</text>
+          <g transform="translate(547 109)" fill="#009fbd"><rect width="13" height="57"/><rect x="16" width="13" height="57"/><rect x="32" width="13" height="57"/><rect x="48" width="13" height="57"/><rect x="64" width="13" height="57"/><rect x="80" width="13" height="57"/><rect x="96" width="13" height="57"/><rect x="112" width="13" height="57"/><rect x="128" width="13" height="57"/><rect x="144" width="13" height="57"/><rect x="160" width="13" height="57"/><rect x="176" width="13" height="57"/><rect x="192" width="13" height="57"/><rect x="208" width="13" height="57"/><rect x="224" width="13" height="57"/><rect x="240" width="13" height="57"/><rect x="256" width="13" height="57"/><rect x="272" width="13" height="57"/><rect x="288" width="13" height="57"/><rect x="304" width="13" height="57"/><rect x="320" width="13" height="57"/><rect x="336" width="13" height="57"/><rect x="352" width="13" height="57"/><rect x="368" width="13" height="57"/><rect x="384" width="13" height="57"/></g>
+          <text x="547" y="192" class="micro" fill="#51d6ed">condition mask = 1 ×25 · loss mask = 0 ×25</text>
+          <text x="547" y="241" class="micro" fill="#aa9cff">TARGET LATENT · 1 + 24</text>
+          <rect x="547" y="257" width="13" height="57" fill="#6d55d9"/><g transform="translate(563 257)" fill="#b0a4e9"><rect width="13" height="57"/><rect x="16" width="13" height="57"/><rect x="32" width="13" height="57"/><rect x="48" width="13" height="57"/><rect x="64" width="13" height="57"/><rect x="80" width="13" height="57"/><rect x="96" width="13" height="57"/><rect x="112" width="13" height="57"/><rect x="128" width="13" height="57"/><rect x="144" width="13" height="57"/><rect x="160" width="13" height="57"/><rect x="176" width="13" height="57"/><rect x="192" width="13" height="57"/><rect x="208" width="13" height="57"/><rect x="224" width="13" height="57"/><rect x="240" width="13" height="57"/><rect x="256" width="13" height="57"/><rect x="272" width="13" height="57"/><rect x="288" width="13" height="57"/><rect x="304" width="13" height="57"/><rect x="320" width="13" height="57"/><rect x="336" width="13" height="57"/><rect x="352" width="13" height="57"/><rect x="368" width="13" height="57"/></g>
+          <text x="547" y="340" class="micro" fill="#aa9cff">condition = [1, 0…0] · loss = [0, 1…1]</text>
+          <rect x="547" y="382" width="400" height="104" rx="8" fill="#ffffff08" stroke="#ffffff20"/>
+          <text x="747" y="416" text-anchor="middle" class="mono inverse" fill="#fff">xσ = σ·ε + (1−σ)·x₀</text><text x="747" y="447" text-anchor="middle" class="mono inverse" fill="#fff">v* = ε − x₀</text><text x="747" y="474" text-anchor="middle" class="micro" fill="#aa9cff">Lflow = mean[(1−m) ⊙ ||vθ−v*||²]</text>
+          <path d="M547 535H947" stroke="#ffffff20"/><text x="547" y="569" class="micro accent2" fill="#009fbd">BACKPROP</text><text x="547" y="598" class="small inverse" fill="#fff">only target T₁…T₂₄ → llm2vae → shared MoT generation path</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene split dark" id="sampling" data-index="06 — CFG">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Two-stage guidance</p>
+        <h2 data-animate="delay-1">先强化 control，<br>再做<span style="color:var(--accent-2)"> text-CFG</span></h2>
+        <p data-animate="delay-2">每个 denoising step 先比较含 control 与去掉 control 的两个条件分支，得到 control-guided velocity；随后才与 unconditional-text 分支混合，最后交给 UniPC 更新。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>2.0×</b><span>control guidance</span></div>
+          <div class="metric"><b>3.0×</b><span>text guidance</span></div>
+          <div class="metric"><b>35</b><span>UniPC updates</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">两种 CFG 不是并列加权，也不是 text 先执行；实现中的顺序直接决定最终速度。</p>
+        <p class="source">transfer.py:274-374,551-567 · omni_mot_model.py:2486-2496 · args.py:782-850</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 06 · control-CFG → text-CFG → UniPC</span>
+        <svg viewBox="0 0 960 660" role="img" aria-label="Transfer 推理的两阶段CFG计算顺序">
+          <text x="45" y="48" class="micro accent2" fill="#009fbd">THREE MODEL EVALUATIONS AT DENOISING STEP σ</text>
+          <rect x="45" y="82" width="257" height="90" rx="8" fill="#009fbd18" stroke="#009fbd"/><text x="173" y="116" text-anchor="middle" class="label inverse" fill="#fff">v_c</text><text x="173" y="141" text-anchor="middle" class="small inverse" fill="#fff">f(text, control, targetσ)</text>
+          <rect x="351" y="82" width="257" height="90" rx="8" fill="#ffffff08" stroke="#ffffff28"/><text x="479" y="116" text-anchor="middle" class="label inverse" fill="#fff">v_nc</text><text x="479" y="141" text-anchor="middle" class="small inverse" fill="#fff">f(text, targetσ)</text>
+          <rect x="657" y="82" width="257" height="90" rx="8" fill="#6d55d918" stroke="#6d55d9"/><text x="785" y="116" text-anchor="middle" class="label inverse" fill="#fff">v_u</text><text x="785" y="141" text-anchor="middle" class="small inverse" fill="#fff">f(uncond-text, control, targetσ)</text>
+
+          <path d="M173 176V244M479 176V244" stroke="#009fbd" stroke-width="2" marker-end="url(#arrow-hot)"/>
+          <rect x="141" y="248" width="370" height="105" rx="10" fill="#009fbd"/>
+          <text x="326" y="285" text-anchor="middle" class="label inverse" fill="#fff">① CONTROL-CFG</text><text x="326" y="319" text-anchor="middle" class="mono inverse" fill="#fff">vctrl = vnc + 2.0 (vc − vnc)</text><text x="326" y="340" text-anchor="middle" class="micro inverse" fill="#fff">drop all control vision items in vnc branch</text>
+          <path d="M511 300H577" stroke="#fff" stroke-width="2" marker-end="url(#arrow)"/><path d="M785 176V371C785 397 718 407 671 407" fill="none" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="581" y="248" width="333" height="105" rx="10" fill="#6d55d9"/>
+          <text x="747" y="285" text-anchor="middle" class="label inverse" fill="#fff">② TEXT-CFG</text><text x="747" y="319" text-anchor="middle" class="mono inverse" fill="#fff">vfinal = vu + 3.0 (vctrl − vu)</text><text x="747" y="340" text-anchor="middle" class="micro inverse" fill="#fff">standard guidance post-processing</text>
+
+          <path d="M747 357V422" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="314" y="426" width="400" height="91" rx="45" fill="#fff"/>
+          <text x="514" y="463" text-anchor="middle" class="label">③ UniPC latent update</text><text x="514" y="490" text-anchor="middle" class="mono">35 steps · shift 10 · seed + chunk_id</text>
+          <path d="M514 521V568" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <rect x="373" y="572" width="282" height="55" rx="8" fill="#ffffff08" stroke="#ffffff28"/><text x="514" y="605" text-anchor="middle" class="small inverse" fill="#fff">next σ or final VAE decode</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene wide-scene dark" id="ar" data-index="07 — AR ROLLOUT">
+      <div class="wide-head">
+        <div>
+          <p class="eyebrow" data-animate>97-frame autoregressive transfer</p>
+          <h2 data-animate="delay-1" style="color:#fff">stride 96：上一个结果成为下一个 appearance anchor</h2>
+        </div>
+        <div data-animate="delay-2">
+          <p style="color:rgba(255,255,255,.62)">每窗 97 帧，其中 1 帧是 target 条件，96 帧是新未来。末窗 control 不足时沿时间反射/重复补齐；输出去掉重叠首帧并裁回 exact T。</p>
+          <div class="legend"><span><i></i>target / generated</span><span><i></i>control window</span><span><i></i>reflection pad</span></div>
+        </div>
+      </div>
+      <div class="wide-figure" data-animate="delay-1">
+        <svg viewBox="0 0 1480 610" role="img" aria-label="Transfer 97帧窗口、stride96和末窗反射padding">
+          <text x="34" y="48" class="micro accent2" fill="#009fbd">EXAMPLE · T = 123 FRAMES</text>
+          <path d="M86 125H1409" stroke="#ffffff35" stroke-width="2"/>
+          <circle cx="105" cy="125" r="8" fill="#6d55d9"/><circle cx="1006" cy="125" r="8" fill="#6d55d9"/><circle cx="1250" cy="125" r="8" fill="#009fbd"/><circle cx="1404" cy="125" r="8" fill="#ffffff55"/>
+          <text x="105" y="157" text-anchor="middle" class="mono inverse" fill="#fff">0</text><text x="1006" y="157" text-anchor="middle" class="mono inverse" fill="#fff">96</text><text x="1250" y="157" text-anchor="middle" class="mono inverse" fill="#fff">122</text><text x="1404" y="157" text-anchor="middle" class="mono inverse" fill="#fff">pad→192</text>
+          <rect x="105" y="79" width="901" height="24" rx="3" fill="#009fbd"/><text x="555" y="69" text-anchor="middle" class="micro" fill="#51d6ed">CONTROL W₀ [0…96] · 97 frames</text>
+          <rect x="1006" y="79" width="244" height="24" rx="3" fill="#009fbd"/><path d="M1250 79H1404V103H1250Z" fill="#8d989c" opacity=".6"/>
+          <g stroke="#ffffff38"><path d="M1260 82L1280 100M1285 82L1305 100M1310 82L1330 100M1335 82L1355 100M1360 82L1380 100M1385 82L1403 99"/></g>
+          <text x="1205" y="69" text-anchor="middle" class="micro" fill="#51d6ed">W₁ [96…122]</text><text x="1327" y="69" text-anchor="middle" class="micro inverse" fill="#fff">reflection / repeat pad</text>
+
+          <text x="34" y="235" class="micro accent" fill="#6d55d9">GENERATED TARGET WINDOWS</text>
+          <rect x="105" y="264" width="901" height="72" rx="7" fill="#6d55d9"/><text x="555" y="292" text-anchor="middle" class="label inverse" fill="#fff">Y₀ = generate 97 frames</text><text x="555" y="318" text-anchor="middle" class="mono inverse" fill="#fff">condition = GT x₀ · seed + 0</text>
+          <path d="M1006 340V379" stroke="#6d55d9" stroke-width="2" marker-end="url(#arrow-accent)"/><text x="1018" y="365" class="micro" fill="#aa9cff">Y₀[96]</text>
+          <rect x="1006" y="383" width="398" height="72" rx="7" fill="#6d55d9"/><text x="1205" y="411" text-anchor="middle" class="label inverse" fill="#fff">Y₁ = generate 97 frames</text><text x="1205" y="437" text-anchor="middle" class="mono inverse" fill="#fff">condition = Y₀[96] · seed + 1</text>
+
+          <text x="34" y="505" class="micro accent2" fill="#009fbd">STITCH + EXACT LENGTH</text>
+          <rect x="105" y="530" width="901" height="35" rx="4" fill="#6d55d9"/><rect x="1006" y="530" width="244" height="35" rx="4" fill="#9b8ce8"/><rect x="1250" y="530" width="154" height="35" rx="4" fill="#ffffff14"/>
+          <text x="555" y="553" text-anchor="middle" class="micro inverse" fill="#fff">Y₀[0…96] · keep 97</text><text x="1128" y="553" text-anchor="middle" class="micro inverse" fill="#fff">Y₁[1…26] · keep 26</text><text x="1327" y="553" text-anchor="middle" class="micro inverse" fill="#fff">trim pad</text>
+          <text x="755" y="595" text-anchor="middle" class="mono" fill="#fff">final = Y₀[0…96] + Y₁[1…26] = 123 frames</text>
+        </svg>
+      </div>
+      <p class="source">transfer.py:43-54,377-596 · vision.py:212-230 · build_transfer_inputs.py:13-35,254-267</p>
+    </section>
+
+    <section class="scene dark" id="result" data-index="08 — RESULT / HANDOFF">
+      <div class="wide-head">
+        <div>
+          <p class="eyebrow" data-animate>Episode 593 · overlay evidence</p>
+          <h2 data-animate="delay-1" style="color:#fff">把 control 直接叠到<br>生成视频上检查</h2>
+        </div>
+        <p data-animate="delay-2" style="color:rgba(255,255,255,.62)">Episode 593 的 control、生成结果与 overlay 均为 652 帧、25 fps。默认播放 overlay；可切换到纯生成视频或纯 control，逐帧检查投影轨迹与机械臂末端是否一致。</p>
+      </div>
+      <div class="result-canvas" data-animate="delay-1">
+        <div class="demo-player wide">
+          <div class="demo-tabs" role="group" aria-label="选择 Transfer episode 593 展示视频">
+            <button type="button" aria-pressed="true" data-demo-src="assets/demos/transfer_episode593_overlay.mp4" data-demo-wide="true" data-demo-label="Control overlay">Overlay · 推荐</button>
+            <button type="button" aria-pressed="false" data-demo-src="assets/demos/transfer_episode593_generated.mp4" data-demo-wide="false" data-demo-label="Generated output">Generated</button>
+            <button type="button" aria-pressed="false" data-demo-src="assets/demos/transfer_episode593_control.mp4" data-demo-wide="false" data-demo-label="Control raster">Control</button>
+          </div>
+          <video id="transfer-demo-video" controls playsinline preload="metadata" poster="assets/demos/transfer_episode593_overlay_poster.jpg">
+            <source src="assets/demos/transfer_episode593_overlay.mp4" type="video/mp4">
+            浏览器无法内嵌播放，请使用下方“直接打开视频”。
+          </video>
+          <img class="print-demo-poster" src="assets/demos/transfer_episode593_overlay_poster.jpg" alt="Transfer episode 593 control overlay poster">
+          <div class="demo-meta">
+            <span><b id="transfer-demo-label">Control overlay · episode 593</b><br>652 frames · 25 fps · 26.08 s</span>
+            <a id="transfer-demo-link" href="assets/demos/transfer_episode593_overlay.mp4" target="_blank" download>直接打开 / 下载当前 MP4 ↗</a>
+          </div>
+        </div>
+        <div class="gap-list">
+          <div><b>01 · RASTER SCALE</b><span>训练与测试的点半径、深度归一化和 salience 必须一致。</span></div>
+          <div><b>02 · 4:3 GEOMETRY</b><span>control raster、首帧和 736×544 模型画布需保持同一投影关系。</span></div>
+          <div><b>03 · CAMERA POSE</b><span>固定外参若与评测相机偏离，控制点会系统性落在错误像素位置。</span></div>
+        </div>
+        <p class="source">visualize_ee_projection.py:97-160,330-433 · transfer.py:571-596 · pack_track1_submission.py:180-240</p>
+      </div>
+    </section>
+  </main>
+  <script src="route_explainer.js"></script>
+  <script>
+    (() => {
+      const scrub = document.querySelector('#hero-scrub');
+      const control = document.querySelector('#hero-control');
+      const output = document.querySelector('#hero-output');
+      const time = document.querySelector('#hero-time');
+      scrub?.addEventListener('input', () => {
+        const n = String(scrub.value).padStart(2, '0');
+        control.src = `assets/demos/transfer593_control_${n}.png`;
+        output.src = `assets/demos/transfer593_generated_${n}.png`;
+        time.value = `t${String.fromCharCode(8320 + Number(scrub.value))}`;
+      });
+      const disk = document.querySelector('#control-disk');
+      document.querySelector('#depth')?.addEventListener('input', e => disk?.setAttribute('r', e.target.value));
+      document.querySelector('#grip')?.addEventListener('input', e => {
+        const a = .4 + Number(e.target.value) / 100 * .45;
+        disk?.setAttribute('fill-opacity', a.toFixed(2));
+      });
+      document.querySelector('#trail-toggle')?.addEventListener('click', e => {
+        const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+        e.currentTarget.setAttribute('aria-pressed', String(on));
+        e.currentTarget.textContent = `future trail [t,t+25] · ${on ? 'ON' : 'OFF'}`;
+        const trail = document.querySelector('#future-trail');
+        if (trail) trail.style.display = on ? '' : 'none';
+      });
+      const demoVideo = document.querySelector('#transfer-demo-video');
+      const demoPlayer = demoVideo?.closest('.demo-player');
+      const demoLink = document.querySelector('#transfer-demo-link');
+      const demoLabel = document.querySelector('#transfer-demo-label');
+      document.querySelectorAll('[data-demo-src]').forEach(button => {
+        button.addEventListener('click', () => {
+          const src = button.dataset.demoSrc;
+          demoVideo.pause();
+          demoVideo.src = src;
+          demoVideo.removeAttribute('poster');
+          demoVideo.load();
+          demoLink.href = src;
+          demoLabel.textContent = `${button.dataset.demoLabel} · episode 593`;
+          demoPlayer.classList.toggle('wide', button.dataset.demoWide === 'true');
+          document.querySelectorAll('[data-demo-src]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

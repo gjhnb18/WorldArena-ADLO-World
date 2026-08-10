@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>WorldArena Track 1 · FD / Action-to-Video</title>
+  <link rel="stylesheet" href="route_explainer.css">
+</head>
+<body class="fd">
+  <div class="progress" aria-hidden="true"><i></i></div>
+  <header class="masthead">
+    <div class="brand">WorldArena Track 1 · Research Route</div>
+    <a class="route-switch" href="WorldArena_Track1_Transfer.html">Transfer 路线 <span aria-hidden="true">↗</span></a>
+  </header>
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a href="#cover"><span>00 / Route</span></a>
+    <a href="#overview"><span>01 / System</span></a>
+    <a href="#action"><span>02 / Action</span></a>
+    <a href="#architecture"><span>03 / Architecture</span></a>
+    <a href="#mot"><span>04 / MoT + Flow</span></a>
+    <a href="#training"><span>05 / Training</span></a>
+    <a href="#ar"><span>06 / AR rollout</span></a>
+    <a href="#result"><span>07 / Result</span></a>
+    <a href="#handoff"><span>08 / Handoff</span></a>
+  </nav>
+  <div class="controls" aria-label="演示控制">
+    <button data-prev title="上一节">↑</button>
+    <button data-next title="下一节">↓</button>
+    <button data-fullscreen title="全屏（F）">⛶</button>
+    <button data-print title="打印 / 导出 PDF">⌁</button>
+  </div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#81919a"/></marker>
+      <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#087f72"/></marker>
+      <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#f1663d"/></marker>
+      <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#10232a" flood-opacity=".12"/></filter>
+    </defs>
+  </svg>
+
+  <main>
+    <section class="scene hero dark" id="cover" data-index="00 — FD">
+      <div class="hero-copy">
+        <p class="eyebrow" data-animate>Action-conditioned world generation</p>
+        <h1 data-animate="delay-1">WorldArena<br>Track 1 <em>FD</em></h1>
+        <p class="lede" data-animate="delay-2">把双臂末端执行器轨迹作为 clean condition，让 Cosmos3-Nano 预测视觉未来；再用短窗口自回归，把局部动力学扩展为 exact-T 完整 episode。</p>
+        <div class="hero-meta" data-animate="delay-3">
+          <div><b>49</b><span>train frames</span></div>
+          <div><b>36×</b><span>MoT layers</span></div>
+          <div><b>64</b><span>AR actions / window</span></div>
+        </div>
+      </div>
+      <div class="hero-visual" data-animate="delay-2" aria-label="FD 生成帧环形预览">
+        <div class="hero-orbit"><div class="flow-ring"></div></div>
+        <div class="hero-core"><div><b>Cosmos3-Nano</b><span>instruction + x₀ + action<br>→ future video</span></div></div>
+        <img class="orbit-shot s1" src="assets/demos/fd471_first.png" alt="条件首帧">
+        <img class="orbit-shot s2" src="assets/demos/fd471_frame_02.png" alt="生成视频早期帧">
+        <img class="orbit-shot s3" src="assets/demos/fd471_frame_06.png" alt="生成视频后期帧">
+        <img class="orbit-shot s4" src="assets/demos/fd471_frame_04.png" alt="生成视频中间帧">
+      </div>
+    </section>
+
+    <section class="scene split tint" id="overview" data-index="01 — SYSTEM">
+      <div class="copy">
+        <p class="eyebrow" data-animate>From local SFT to long-horizon rollout</p>
+        <h2 data-animate="delay-1">训练和推理共享<br><span class="accent">同一个接口</span></h2>
+        <p data-animate="delay-2">训练只学习 48 个动作步对应的局部视觉动力学。AR 工具改变的是时间切片和条件帧来源，而不是模型内部结构。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>10k</b><span>SFT iterations</span></div>
+          <div class="metric"><b>25 Hz</b><span>effective video rate</span></div>
+          <div class="metric"><b>30</b><span>UniPC steps / window</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">窗口内：GT action 驱动未来。窗口间：上一窗口最后一帧传递 appearance memory。</p>
+        <p class="source">fd_robotwin_nano.py:178-250 · fd_robotwin_repro.toml:18-59 · run_fd_ar.py:160-249</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 01 · end-to-end route</span>
+        <svg viewBox="0 0 960 650" role="img" aria-label="FD 从训练到自回归推理的系统路线图">
+          <text x="30" y="55" class="micro accent" fill="#087f72">TRAIN / ALIGNED LOCAL WINDOWS</text>
+          <path d="M30 84H930" class="grid-line"/>
+          <rect x="34" y="116" width="155" height="112" rx="5" class="node" fill="#fff" stroke="#b8c4c6" filter="url(#soft-shadow)"/>
+          <image href="assets/shared/train_rgb_strip.png" x="42" y="124" width="139" height="72" preserveAspectRatio="xMidYMid slice"/>
+          <text x="111" y="211" text-anchor="middle" class="mono">RGB · 49 frames</text>
+          <path d="M192 172H248" class="arrow-accent"/>
+          <rect x="252" y="112" width="168" height="120" rx="7" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="336" y="145" text-anchor="middle" class="label">Action transform</text>
+          <text x="336" y="169" text-anchor="middle" class="small">16-D absolute EEF</text>
+          <text x="336" y="188" text-anchor="middle" class="small">relative → normalize → 64-D</text>
+          <text x="336" y="216" text-anchor="middle" class="micro accent2" fill="#f1663d">CLEAN CONDITION</text>
+          <path d="M424 172H478" class="arrow-accent"/>
+          <rect x="482" y="101" width="220" height="142" rx="14" class="node-dark" fill="#0d3534" stroke="#0d3534" filter="url(#soft-shadow)"/>
+          <text x="592" y="139" text-anchor="middle" class="label inverse" fill="#fff">Cosmos3-Nano</text>
+          <text x="592" y="162" text-anchor="middle" class="small inverse" fill="#fff">36-layer multimodal MoT</text>
+          <rect x="514" y="183" width="156" height="27" rx="13" fill="#fff" opacity=".12"/>
+          <text x="592" y="201" text-anchor="middle" class="micro inverse" fill="#fff">RECTIFIED-FLOW SFT</text>
+          <path d="M706 172H760" class="arrow-accent"/>
+          <rect x="764" y="116" width="162" height="112" rx="7" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="845" y="151" text-anchor="middle" class="label">DCP checkpoint</text>
+          <text x="845" y="175" text-anchor="middle" class="small">generation + action adapters</text>
+          <text x="845" y="204" text-anchor="middle" class="micro accent" fill="#087f72">save / 1k iter</text>
+
+          <text x="30" y="315" class="micro accent2" fill="#f1663d">INFERENCE / WINDOW-CHAINED AR</text>
+          <path d="M30 344H930" class="grid-line"/>
+          <rect x="34" y="382" width="132" height="125" rx="5" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <image href="assets/demos/fd471_first.png" x="42" y="390" width="116" height="87" preserveAspectRatio="xMidYMid slice"/>
+          <text x="100" y="493" text-anchor="middle" class="mono">GT first frame</text>
+          <path d="M170 444H219" class="arrow-hot"/>
+          <rect x="223" y="373" width="179" height="143" rx="7" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="312" y="406" text-anchor="middle" class="label">64-action window</text>
+          <text x="312" y="431" text-anchor="middle" class="small">window-local anchor</text>
+          <text x="312" y="451" text-anchor="middle" class="small">same 16→64 transform</text>
+          <rect x="250" y="473" width="125" height="22" rx="3" fill="#fff"/>
+          <text x="312" y="487" class="micro" text-anchor="middle">Wₖ : [0 … 64]</text>
+          <path d="M406 444H455" class="arrow-hot"/>
+          <rect x="459" y="373" width="194" height="143" rx="12" class="node-dark" fill="#0d3534" stroke="#0d3534"/>
+          <text x="556" y="411" text-anchor="middle" class="label inverse" fill="#fff">same checkpoint</text>
+          <text x="556" y="435" text-anchor="middle" class="small inverse" fill="#fff">30-step UniPC</text>
+          <text x="556" y="456" text-anchor="middle" class="small inverse" fill="#fff">seed fixed per episode</text>
+          <path d="M657 444H705" class="arrow-hot"/>
+          <rect x="709" y="373" width="217" height="143" rx="7" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="817" y="408" text-anchor="middle" class="label">stitch exact-T mp4</text>
+          <text x="817" y="437" text-anchor="middle" class="mono">W₀[0…v₀]</text>
+          <text x="817" y="460" text-anchor="middle" class="mono">+ Wₖ&gt;0[1…vₖ]</text>
+          <text x="817" y="490" text-anchor="middle" class="micro accent" fill="#087f72">drop overlap anchors</text>
+
+          <path d="M815 534C815 598 314 600 314 520" fill="none" stroke="#f1663d" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrow-hot)"/>
+          <text x="563" y="591" text-anchor="middle" class="micro accent2" fill="#f1663d">last generated frame → next clean x₀</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene split" id="action" data-index="02 — ACTION">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Action representation</p>
+        <h2 data-animate="delay-1">16-D 双臂 EEF<br>先<span class="accent">重新锚定</span></h2>
+        <p data-animate="delay-2">每个窗口都以自己的起始状态为原点：平移做差，旋转乘以起始姿态逆；随后按官方 RoboTwin quantile 统计映射到 [-1,1]，裁剪并 zero-pad 到 64 维。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>8 + 8</b><span>left / right arm</span></div>
+          <div class="metric"><b>16 → 64</b><span>preprocess, then adapter</span></div>
+          <div class="metric"><b>48</b><span>train action steps</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">相对化不是模型层；模型的 action2llm 实际接收 64-D 输入。FD 路径中的 quaternion 按 XYZW 交给 SciPy Rotation。</p>
+        <p class="source">robotwin_lerobot_dataset.py:97-127,317-341 · action_processing.py:163-181,205-231</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 02 · coordinate transform</span>
+        <svg viewBox="0 0 960 690" role="img" aria-label="双臂 EEF 动作相对化、归一化和维度扩展">
+          <text x="42" y="55" class="micro accent" fill="#087f72">A · ABSOLUTE EEF STATE</text>
+          <rect x="42" y="82" width="365" height="182" rx="10" class="node" fill="#fff" stroke="#b8c4c6" filter="url(#soft-shadow)"/>
+          <path d="M112 214V126M112 214H205M112 214L68 170" stroke="#87969e" stroke-width="2" fill="none"/>
+          <text x="108" y="117" class="micro accent" fill="#087f72">Y</text><text x="210" y="220" class="micro accent2" fill="#f1663d">X</text><text x="55" y="166" class="micro">Z</text>
+          <circle cx="246" cy="137" r="27" fill="#087f72"/><text x="246" y="142" text-anchor="middle" class="mono inverse" fill="#fff">L</text>
+          <circle cx="324" cy="207" r="27" fill="#f1663d"/><text x="324" y="212" text-anchor="middle" class="mono inverse" fill="#fff">R</text>
+          <text x="224" y="243" text-anchor="middle" class="mono">[x y z, q₍xyzw₎, grip] × 2</text>
+
+          <path d="M411 174H475" class="arrow-hot"/>
+          <text x="443" y="159" text-anchor="middle" class="micro accent2" fill="#f1663d">anchor at t₀</text>
+          <rect x="479" y="82" width="431" height="182" rx="10" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="509" y="121" class="label">window-local relative pose</text>
+          <text x="509" y="160" class="mono">Δpₜ = pₜ − p₀</text>
+          <text x="509" y="198" class="mono">qᵣₑₗ,ₜ = q₀⁻¹ ⊗ qₜ</text>
+          <path d="M728 119V224" class="grid-line"/>
+          <circle cx="774" cy="177" r="8" fill="#87969e"/><circle cx="847" cy="177" r="8" fill="#087f72"/>
+          <path d="M782 177H839" class="arrow-accent"/>
+          <text x="810" y="150" text-anchor="middle" class="micro accent" fill="#087f72">relative motion</text>
+          <text x="810" y="213" text-anchor="middle" class="small">same distribution in every AR window</text>
+
+          <text x="42" y="331" class="micro accent" fill="#087f72">B · NUMERICAL PIPELINE</text>
+          <path d="M42 357H910" class="grid-line"/>
+          <rect x="42" y="394" width="184" height="88" rx="8" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="134" y="426" text-anchor="middle" class="label">relative 16-D</text>
+          <text x="134" y="452" text-anchor="middle" class="small">Δxyz · qrel · grasp ×2</text>
+          <path d="M230 438H291" class="arrow-accent"/>
+          <rect x="295" y="394" width="180" height="88" rx="8" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <text x="385" y="426" text-anchor="middle" class="label">quantile map</text>
+          <text x="385" y="452" text-anchor="middle" class="mono">[q₀₁,q₉₉] → [-1,1]</text>
+          <path d="M479 438H540" class="arrow-accent"/>
+          <rect x="544" y="394" width="132" height="88" rx="8" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="610" y="426" text-anchor="middle" class="label">clip</text>
+          <text x="610" y="452" text-anchor="middle" class="mono">[-1,1]</text>
+          <path d="M680 438H741" class="arrow-hot"/>
+          <rect x="745" y="394" width="165" height="88" rx="8" class="node-dark" fill="#0d3534" stroke="#0d3534"/>
+          <text x="827" y="426" text-anchor="middle" class="label inverse" fill="#fff">zero-pad</text>
+          <text x="827" y="452" text-anchor="middle" class="mono inverse" fill="#fff">16 → 64</text>
+
+          <text x="42" y="544" class="micro accent2" fill="#f1663d">C · TIME AXIS / WINDOW RE-ANCHORING</text>
+          <path d="M69 602H883" stroke="#7e8e97" stroke-width="2"/>
+          <circle cx="92" cy="602" r="9" fill="#087f72"/><circle cx="365" cy="602" r="9" fill="#f1663d"/><circle cx="638" cy="602" r="9" fill="#087f72"/><circle cx="883" cy="602" r="9" fill="#7e8e97"/>
+          <rect x="92" y="566" width="273" height="17" rx="3" fill="#087f72" opacity=".85"/>
+          <rect x="365" y="566" width="273" height="17" rx="3" fill="#f1663d" opacity=".85"/>
+          <rect x="638" y="566" width="245" height="17" rx="3" fill="#617d9a" opacity=".85"/>
+          <text x="229" y="555" text-anchor="middle" class="micro">W₀ : state[0] is origin</text>
+          <text x="501" y="555" text-anchor="middle" class="micro">W₁ : state[64] is new origin</text>
+          <text x="760" y="555" text-anchor="middle" class="micro">W₂ : state[128] is new origin</text>
+          <text x="92" y="630" text-anchor="middle" class="micro">0</text><text x="365" y="630" text-anchor="middle" class="micro">64</text><text x="638" y="630" text-anchor="middle" class="micro">128</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene wide-scene tint" id="architecture" data-index="03 — MODEL">
+      <div class="wide-head">
+        <div>
+          <p class="eyebrow" data-animate>Full multimodal topology</p>
+          <h2 data-animate="delay-1">FD 模型结构：动作是 clean condition，未来视觉是 flow target</h2>
+        </div>
+        <div data-animate="delay-2">
+          <p>Instruction、首帧 latent、未来 noisy latent 和 action token 被 pack 到一个多模态序列中。36 层 MoT 对 generation query 开放全局 attention。</p>
+          <div class="legend"><span><i></i>clean condition</span><span><i></i>trainable path / target</span><span><i></i>frozen or noisy</span></div>
+        </div>
+      </div>
+      <div class="wide-figure" data-animate="delay-1">
+        <svg viewBox="0 0 1480 650" role="img" aria-label="FD 模型完整结构图">
+          <text x="25" y="39" class="micro accent" fill="#087f72">INPUT MODALITIES</text>
+          <text x="310" y="39" class="micro accent" fill="#087f72">ADAPTERS / TOKENIZATION</text>
+          <text x="605" y="39" class="micro accent" fill="#087f72">PACKED MULTIMODAL SEQUENCE</text>
+          <text x="922" y="39" class="micro accent" fill="#087f72">COSMOS3-NANO</text>
+          <text x="1250" y="39" class="micro accent" fill="#087f72">OUTPUT + LOSS</text>
+          <path d="M25 55H1455" class="grid-line"/>
+
+          <rect x="25" y="90" width="212" height="78" rx="8" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <text x="47" y="122" class="label">Instruction</text><text x="47" y="147" class="small">task + embodiment</text>
+          <rect x="25" y="199" width="212" height="142" rx="8" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <image href="assets/demos/fd471_first.png" x="35" y="209" width="91" height="68" preserveAspectRatio="xMidYMid slice"/>
+          <rect x="134" y="209" width="91" height="68" fill="#d9e0e1"/><text x="179" y="247" text-anchor="middle" class="micro">future RGB</text>
+          <text x="47" y="306" class="label">RGB clip · 49f</text><text x="47" y="328" class="small">x₀ clean · future noisy</text>
+          <rect x="25" y="373" width="212" height="92" rx="8" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="47" y="408" class="label">EEF actions</text><text x="47" y="434" class="small">48×16 → 48×64</text>
+
+          <path d="M241 129H304" class="arrow"/><path d="M241 270H304" class="arrow-accent"/><path d="M241 419H304" class="arrow-hot"/>
+          <rect x="308" y="90" width="205" height="78" rx="8" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <text x="410" y="122" text-anchor="middle" class="label">text embedding</text><text x="410" y="146" text-anchor="middle" class="small">Qwen embedding</text>
+          <rect x="308" y="199" width="205" height="142" rx="8" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="410" y="236" text-anchor="middle" class="label">Wan2.2 VAE</text><text x="410" y="260" text-anchor="middle" class="small">49 RGB → 13 latent</text>
+          <path d="M343 293H477" stroke="#b4c0c2" stroke-width="8"/><path d="M343 293H365" stroke="#087f72" stroke-width="8"/>
+          <text x="410" y="321" text-anchor="middle" class="micro">vae2llm → hidden 4096</text>
+          <rect x="308" y="373" width="205" height="92" rx="8" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="410" y="407" text-anchor="middle" class="label">action2llm</text><text x="410" y="434" text-anchor="middle" class="mono">64 → hidden 4096</text>
+
+          <path d="M517 129H589" class="arrow"/><path d="M517 270H589" class="arrow-accent"/><path d="M517 419H589" class="arrow-hot"/>
+          <rect x="593" y="90" width="275" height="375" rx="13" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <text x="619" y="122" class="label">sequence packing</text><text x="619" y="145" class="small">joint attention graph</text>
+          <rect x="619" y="178" width="223" height="34" rx="4" fill="#dce8ee"/><text x="730" y="195" class="token-text">TEXT TOKENS</text>
+          <rect x="619" y="222" width="34" height="112" rx="4" fill="#087f72"/><text x="636" y="278" class="token-text inverse" fill="#fff" transform="rotate(-90 636 278)">x₀ CLEAN</text>
+          <g fill="#d6dddf"><rect x="661" y="222" width="34" height="112" rx="4"/><rect x="703" y="222" width="34" height="112" rx="4"/><rect x="745" y="222" width="34" height="112" rx="4"/><rect x="787" y="222" width="55" height="112" rx="4"/></g>
+          <text x="752" y="281" class="token-text">NOISY FUTURE</text>
+          <rect x="619" y="345" width="223" height="70" rx="4" fill="#f8d5c8"/><text x="730" y="380" class="token-text">ACTION TOKENS · CLEAN</text>
+          <text x="619" y="443" class="micro accent" fill="#087f72">shared temporal coordinates / mRoPE</text>
+
+          <path d="M872 278H930" class="arrow-accent"/>
+          <g opacity=".3"><rect x="954" y="106" width="261" height="349" rx="16" fill="#087f72"/><rect x="944" y="96" width="261" height="349" rx="16" fill="#fff" stroke="#aebcbe"/></g>
+          <rect x="934" y="86" width="261" height="349" rx="16" class="node-dark" fill="#0d3534" stroke="#0d3534" filter="url(#soft-shadow)"/>
+          <text x="1064" y="129" text-anchor="middle" class="label inverse" fill="#fff">Cosmos3-Nano MoT</text>
+          <text x="1064" y="153" text-anchor="middle" class="small inverse" fill="#fff">Qwen3-VL-8B · hidden 4096</text>
+          <rect x="969" y="184" width="191" height="46" rx="7" fill="#fff" opacity=".1"/>
+          <text x="1064" y="212" text-anchor="middle" class="mono inverse" fill="#fff">two-way joint attention</text>
+          <rect x="969" y="242" width="191" height="46" rx="7" fill="#fff" opacity=".1"/>
+          <text x="1064" y="270" text-anchor="middle" class="mono inverse" fill="#fff">mRoPE + RMSNorm</text>
+          <rect x="969" y="300" width="191" height="46" rx="7" fill="#fff" opacity=".1"/>
+          <text x="1064" y="328" text-anchor="middle" class="mono inverse" fill="#fff">generation MLP / FFN</text>
+          <text x="1064" y="394" text-anchor="middle" class="label accent2" fill="#f1663d">× 36 layers</text>
+
+          <path d="M1199 258H1251" class="arrow-hot"/>
+          <rect x="1255" y="202" width="200" height="113" rx="8" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="1355" y="238" text-anchor="middle" class="label">llm2vae</text><text x="1355" y="263" text-anchor="middle" class="small">predict latent velocity vθ</text><text x="1355" y="290" text-anchor="middle" class="micro accent2" fill="#f1663d">future tokens only</text>
+          <path d="M1355 319V368" class="arrow-hot"/>
+          <rect x="1255" y="372" width="200" height="93" rx="8" class="node" fill="#fff" stroke="#b8c4c6"/>
+          <text x="1355" y="406" text-anchor="middle" class="label">Wan VAE decode</text><text x="1355" y="433" text-anchor="middle" class="small">49-frame RGB window</text>
+
+          <rect x="308" y="520" width="1147" height="83" rx="8" fill="#fff" stroke="#ccd5d6"/>
+          <text x="335" y="550" class="micro accent2" fill="#f1663d">TRAINABLE PARAMETERS</text>
+          <text x="335" y="579" class="mono">*_moe_gen (dense MLP) · time_embedder · vae2llm · llm2vae · action adapters</text>
+          <text x="1255" y="550" class="micro accent" fill="#087f72">LOSS MASK</text><text x="1255" y="579" class="mono">L only on x₁:₄₈</text>
+        </svg>
+      </div>
+      <p class="source">cosmos3_vfm_network.py:136-157,673-779 · omni_mot_model.py:1040-1097 · Qwen3-VL-8B-Instruct.json:15-21</p>
+    </section>
+
+    <section class="scene split dark" id="mot" data-index="04 — MOT + FLOW">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Inside the backbone</p>
+        <h2 data-animate="delay-1">不是串联模块，<br>而是<span style="color:var(--accent-2)">联合注意力场</span></h2>
+        <p data-animate="delay-2">Understanding/text query 保持 causal；generation query 可以读取全部文本、视觉和动作 token。每层拥有理解/生成两套 QKV 路径，视觉生成再进入独立的 dense generation MLP。</p>
+        <p data-animate="delay-2">训练不是直接回归 RGB：在 VAE latent 中构造 rectified-flow 路径，并只在未来视觉 token 上监督速度。</p>
+        <p class="takeaway" data-animate="delay-3">Action token 不承担 action loss；它通过 joint attention 改变 future latent 的速度场。</p>
+        <p class="source">unified_mot.py:450-530,595-721,1009-1174 · attention.py:88-145 · rectified_flow.py:176-215</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 04 · attention geometry + rectified flow</span>
+        <svg viewBox="0 0 960 700" role="img" aria-label="MoT attention mask和rectified flow训练图">
+          <text x="37" y="55" class="micro accent2" fill="#f1663d">A · QUERY → KEY / VALUE VISIBILITY</text>
+          <text x="167" y="96" class="micro inverse" fill="#fff">TXT</text><text x="242" y="96" class="micro inverse" fill="#fff">x₀</text><text x="317" y="96" class="micro inverse" fill="#fff">x₁:T</text><text x="392" y="96" class="micro inverse" fill="#fff">ACT</text>
+          <text x="66" y="145" class="micro inverse" fill="#fff">TXT</text><text x="66" y="220" class="micro inverse" fill="#fff">x₀</text><text x="66" y="295" class="micro inverse" fill="#fff">x₁:T</text><text x="66" y="370" class="micro inverse" fill="#fff">ACT</text>
+          <g transform="translate(123 109)">
+            <rect x="0" y="0" width="64" height="64" class="mask-on"/><rect x="75" y="0" width="64" height="64" fill="#ffffff17"/><rect x="150" y="0" width="64" height="64" fill="#ffffff17"/><rect x="225" y="0" width="64" height="64" fill="#ffffff17"/>
+            <rect x="0" y="75" width="64" height="64" class="mask-on"/><rect x="75" y="75" width="64" height="64" class="mask-on"/><rect x="150" y="75" width="64" height="64" class="mask-on"/><rect x="225" y="75" width="64" height="64" class="mask-on"/>
+            <rect x="0" y="150" width="64" height="64" class="mask-on"/><rect x="75" y="150" width="64" height="64" class="mask-on"/><rect x="150" y="150" width="64" height="64" class="mask-on"/><rect x="225" y="150" width="64" height="64" class="mask-on"/>
+            <rect x="0" y="225" width="64" height="64" class="mask-hot"/><rect x="75" y="225" width="64" height="64" class="mask-hot"/><rect x="150" y="225" width="64" height="64" class="mask-hot"/><rect x="225" y="225" width="64" height="64" class="mask-hot"/>
+          </g>
+          <text x="124" y="423" class="small inverse" fill="#fff">text query: causal / text-only</text><text x="124" y="444" class="small inverse" fill="#fff">generation queries: full multimodal context</text>
+
+          <text x="514" y="55" class="micro accent2" fill="#f1663d">B · ONE MoT GENERATION BLOCK ×36</text>
+          <rect x="514" y="84" width="405" height="373" rx="14" fill="#fff" opacity=".06" stroke="#ffffff2d"/>
+          <rect x="543" y="113" width="133" height="59" rx="7" fill="#ffffff12" stroke="#ffffff30"/><text x="610" y="139" text-anchor="middle" class="mono inverse" fill="#fff">gen Q / K / V</text><text x="610" y="159" text-anchor="middle" class="micro inverse" fill="#fff">domain-aware projection</text>
+          <rect x="756" y="113" width="133" height="59" rx="7" fill="#ffffff12" stroke="#ffffff30"/><text x="822" y="139" text-anchor="middle" class="mono inverse" fill="#fff">und Q / K / V</text><text x="822" y="159" text-anchor="middle" class="micro inverse" fill="#fff">causal text path</text>
+          <path d="M610 176V223M822 176V223" stroke="#fff" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <rect x="597" y="227" width="238" height="62" rx="8" fill="#087f72"/><text x="716" y="254" text-anchor="middle" class="label inverse" fill="#fff">joint attention</text><text x="716" y="275" text-anchor="middle" class="micro inverse" fill="#fff">shared K/V layout · modality mask</text>
+          <path d="M716 293V331" stroke="#fff" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <rect x="597" y="335" width="238" height="62" rx="8" fill="#f1663d"/><text x="716" y="362" text-anchor="middle" class="label inverse" fill="#fff">generation MLP / FFN</text><text x="716" y="383" text-anchor="middle" class="micro inverse" fill="#fff">dense path · *_moe_gen naming</text>
+          <text x="716" y="431" text-anchor="middle" class="micro inverse" fill="#fff">RMSNorm · mRoPE · residual around each sublayer</text>
+
+          <text x="37" y="515" class="micro accent2" fill="#f1663d">C · RECTIFIED-FLOW PATH IN LATENT SPACE</text>
+          <path d="M105 606H842" stroke="#ffffff42" stroke-width="2"/>
+          <circle cx="141" cy="606" r="13" fill="#d7dfdf"/><circle cx="491" cy="606" r="13" fill="#f1663d"/><circle cx="808" cy="606" r="13" fill="#087f72"/>
+          <text x="141" y="574" text-anchor="middle" class="mono inverse" fill="#fff">ε</text><text x="491" y="574" text-anchor="middle" class="mono inverse" fill="#fff">zₜ</text><text x="808" y="574" text-anchor="middle" class="mono inverse" fill="#fff">z₁</text>
+          <text x="491" y="644" text-anchor="middle" class="label inverse" fill="#fff">zₜ = t·ε + (1−t)·z₁</text>
+          <text x="491" y="671" text-anchor="middle" class="mono accent2">target velocity v* = ε − z₁</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene split" id="training" data-index="05 — TRAINING">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Training computation graph</p>
+        <h2 data-animate="delay-1">条件全部可见，<br>loss 只打在<span class="accent">未来</span></h2>
+        <p data-animate="delay-2">首帧 latent 与全部 action token 保持 clean。仅未来 12 个 latent time slices 被注入噪声并承担 flow-matching loss；文本提供任务和视角语义。</p>
+        <div class="metrics" data-animate="delay-2">
+          <div class="metric"><b>13</b><span>VAE latent frames</span></div>
+          <div class="metric"><b>1 + 12</b><span>clean + noisy latent</span></div>
+          <div class="metric"><b>1.0</b><span>vision loss scale</span></div>
+        </div>
+        <p class="takeaway" data-animate="delay-3">更新 generation stack 和 action adapter；VAE 负责压缩/解码，但不把 RGB 空间直接作为优化目标。</p>
+        <p class="source">fd_robotwin_nano.py:47-250 · omni_mot_model.py:972-1007 · flow_matching.py:18-35,61-90</p>
+      </div>
+      <div class="figure" data-animate="delay-1">
+        <span class="figure-label">Figure 05 · clean / noisy / loss masks</span>
+        <svg viewBox="0 0 960 650" role="img" aria-label="FD 训练时的clean condition、noisy latent与loss mask">
+          <text x="43" y="52" class="micro accent" fill="#087f72">RGB TIME</text>
+          <image href="assets/shared/train_rgb_strip.png" x="43" y="77" width="874" height="135" preserveAspectRatio="xMidYMid slice"/>
+          <rect x="43" y="77" width="70" height="135" fill="none" stroke="#087f72" stroke-width="5"/>
+          <path d="M113 77H917V212H113Z" fill="#f1663d" opacity=".08"/>
+          <text x="78" y="233" text-anchor="middle" class="micro accent" fill="#087f72">x₀ clean</text><text x="517" y="233" text-anchor="middle" class="micro accent2" fill="#f1663d">x₁:₄₈ target future</text>
+
+          <text x="43" y="291" class="micro accent" fill="#087f72">VAE LATENT TIME · 49 → 13</text>
+          <g transform="translate(43 311)">
+            <rect width="58" height="73" rx="4" fill="#087f72"/>
+            <rect x="68" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="136" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="204" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="272" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="340" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="408" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="476" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="544" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="612" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="680" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="748" width="58" height="73" rx="4" fill="#d7dfdf"/><rect x="816" width="58" height="73" rx="4" fill="#d7dfdf"/>
+          </g>
+          <text x="72" y="356" text-anchor="middle" class="micro inverse" fill="#fff">z₀</text><text x="514" y="356" text-anchor="middle" class="mono">zₜ = tε + (1−t)z₁</text>
+
+          <text x="43" y="440" class="micro accent" fill="#087f72">CONDITION MASK</text>
+          <rect x="43" y="461" width="58" height="30" rx="3" fill="#087f72"/><rect x="111" y="461" width="806" height="30" rx="3" fill="#eef1f1"/>
+          <text x="72" y="481" text-anchor="middle" class="micro inverse" fill="#fff">1</text><text x="514" y="481" text-anchor="middle" class="micro">0 · future is generated</text>
+          <text x="43" y="525" class="micro accent2" fill="#f1663d">LOSS MASK</text>
+          <rect x="43" y="546" width="58" height="30" rx="3" fill="#eef1f1"/><rect x="111" y="546" width="806" height="30" rx="3" fill="#f1663d"/>
+          <text x="72" y="566" text-anchor="middle" class="micro">0</text><text x="514" y="566" text-anchor="middle" class="micro inverse" fill="#fff">1 · mean_future ||vθ(zₜ,t,c) − (ε−z₁)||²</text>
+          <path d="M43 606H917" class="grid-line"/><text x="43" y="630" class="micro accent" fill="#087f72">C = instruction + z₀ + all action tokens</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="scene wide-scene tint" id="ar" data-index="06 — AR ROLLOUT">
+      <div class="wide-head">
+        <div>
+          <p class="eyebrow" data-animate>Autoregressive state machine</p>
+          <h2 data-animate="delay-1">64-action 短窗口，闭区间拼接成 exact-T</h2>
+        </div>
+        <div data-animate="delay-2">
+          <p>窗口 k 覆盖原生索引 [kW, kW+W]。非首窗口丢弃重复的 frame 0；最后一个窗口按 validₖ 截断。模型常驻单进程，episode 锁每窗口 heartbeat。</p>
+          <div class="legend"><span><i></i>kept frames</span><span><i></i>carried anchor</span><span><i></i>padded / trimmed</span></div>
+        </div>
+      </div>
+      <div class="wide-figure" data-animate="delay-1">
+        <svg viewBox="0 0 1480 600" role="img" aria-label="FD 64-action自回归窗口与拼接规则">
+          <text x="30" y="45" class="micro accent" fill="#087f72">STATE TRAJECTORY / NATIVE INDEX</text>
+          <path d="M50 135H1420" stroke="#9eabad" stroke-width="2"/>
+          <g fill="#087f72"><circle cx="80" cy="135" r="9"/><circle cx="475" cy="135" r="9"/><circle cx="870" cy="135" r="9"/></g><circle cx="1265" cy="135" r="9" fill="#f1663d"/><circle cx="1405" cy="135" r="9" fill="#9eabad"/>
+          <text x="80" y="166" text-anchor="middle" class="mono">0</text><text x="475" y="166" text-anchor="middle" class="mono">64</text><text x="870" y="166" text-anchor="middle" class="mono">128</text><text x="1265" y="166" text-anchor="middle" class="mono">192</text><text x="1405" y="166" text-anchor="middle" class="mono">L−1</text>
+          <rect x="80" y="82" width="395" height="27" rx="4" fill="#087f72"/><rect x="475" y="82" width="395" height="27" rx="4" fill="#f1663d"/><rect x="870" y="82" width="395" height="27" rx="4" fill="#617d9a"/><rect x="1265" y="82" width="140" height="27" rx="4" fill="#d7dfdf"/>
+          <text x="277" y="73" text-anchor="middle" class="micro">actions [0…63]</text><text x="672" y="73" text-anchor="middle" class="micro">actions [64…127]</text><text x="1067" y="73" text-anchor="middle" class="micro">actions [128…191]</text><text x="1335" y="73" text-anchor="middle" class="micro">partial</text>
+
+          <text x="30" y="235" class="micro accent2" fill="#f1663d">WINDOW TRANSITION</text>
+          <rect x="55" y="271" width="292" height="145" rx="10" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="201" y="307" text-anchor="middle" class="label">W₀ · condition = GT x₀</text><text x="201" y="333" text-anchor="middle" class="mono">emit frames [0…64]</text>
+          <image href="assets/demos/fd471_first.png" x="83" y="353" width="71" height="53"/><image href="assets/demos/fd471_frame_02.png" x="166" y="353" width="71" height="53"/><image href="assets/demos/fd471_frame_03.png" x="249" y="353" width="71" height="53"/>
+          <path d="M351 343H451" class="arrow-hot"/><text x="401" y="330" text-anchor="middle" class="micro accent2" fill="#f1663d">frame 64</text>
+          <rect x="455" y="271" width="292" height="145" rx="10" class="node-hot" fill="#fbe8e0" stroke="#f1663d"/>
+          <text x="601" y="307" text-anchor="middle" class="label">W₁ · condition = W₀[64]</text><text x="601" y="333" text-anchor="middle" class="mono">emit frames [0…64]</text>
+          <image href="assets/demos/fd471_frame_03.png" x="483" y="353" width="71" height="53"/><image href="assets/demos/fd471_frame_04.png" x="566" y="353" width="71" height="53"/><image href="assets/demos/fd471_frame_05.png" x="649" y="353" width="71" height="53"/>
+          <path d="M751 343H851" class="arrow-hot"/><text x="801" y="330" text-anchor="middle" class="micro accent2" fill="#f1663d">frame 64</text>
+          <rect x="855" y="271" width="292" height="145" rx="10" class="node-soft" fill="#e8f4f1" stroke="#087f72"/>
+          <text x="1001" y="307" text-anchor="middle" class="label">W₂ · condition = W₁[64]</text><text x="1001" y="333" text-anchor="middle" class="mono">emit [0…valid₂]</text>
+          <image href="assets/demos/fd471_frame_05.png" x="883" y="353" width="71" height="53"/><image href="assets/demos/fd471_frame_06.png" x="966" y="353" width="71" height="53"/><rect x="1049" y="353" width="71" height="53" fill="#e3e7e7"/><text x="1084" y="383" text-anchor="middle" class="micro">trim</text>
+          <path d="M1151 343H1224" class="arrow-accent"/>
+          <rect x="1228" y="271" width="203" height="145" rx="10" class="node-dark" fill="#0d3534" stroke="#0d3534"/>
+          <text x="1330" y="306" text-anchor="middle" class="label inverse" fill="#fff">final mp4</text><text x="1330" y="341" text-anchor="middle" class="mono inverse" fill="#fff">W₀[0…v₀]</text><text x="1330" y="367" text-anchor="middle" class="mono inverse" fill="#fff">+ Σ Wₖ[1…vₖ]</text><text x="1330" y="399" text-anchor="middle" class="micro accent2" fill="#f1663d">exact L frames</text>
+
+          <rect x="55" y="475" width="1376" height="70" rx="8" fill="#fff" stroke="#c7d1d2"/>
+          <text x="84" y="505" class="micro accent" fill="#087f72">PERSISTENT WORKER</text><text x="84" y="528" class="mono">load model once</text>
+          <path d="M260 510H330" class="arrow"/><text x="354" y="505" class="micro accent" fill="#087f72">WINDOW LOOP</text><text x="354" y="528" class="mono">build JSON → generate → decode → heartbeat</text>
+          <path d="M772 510H842" class="arrow"/><text x="866" y="505" class="micro accent" fill="#087f72">EPISODE FINISH</text><text x="866" y="528" class="mono">stitch → trim → write atomically → release lock</text>
+        </svg>
+      </div>
+      <p class="source">run_fd_ar.py:2-43,160-249,257-383 · run_fd_ar_multi.sh:4-28,50-95</p>
+    </section>
+
+    <section class="scene results" id="result" data-index="07 — OUTPUT">
+      <div class="copy">
+        <p class="eyebrow" data-animate>Observed rollout</p>
+        <h2 data-animate="delay-1">动作可跟随，<br>但误差会<span class="accent">累积</span></h2>
+        <p data-animate="delay-2">真实 <b>fixed_scene_task / episode 471</b> 的 FD 输出显示，机器人姿态和物体交互可以随 action 演化；长时滚动的主要风险来自 appearance drift、接触瞬间和遮挡后的几何恢复。</p>
+        <p class="takeaway" data-animate="delay-3">评估要同时看 trajectory accuracy 与视频真实性，不能只看单帧清晰度。</p>
+        <p class="source">run_fd_ar.py:257-383 · WorldArena/trajectory_accuracy.py:181-220 · VLM_judge.py:47-150</p>
+      </div>
+      <div class="result-canvas" data-animate="delay-1">
+        <div class="demo-player">
+          <video controls playsinline preload="metadata" poster="assets/demos/fd_episode471_poster.jpg">
+            <source src="assets/demos/fd_episode471.mp4" type="video/mp4">
+            浏览器无法内嵌播放，请使用下方“直接打开视频”。
+          </video>
+          <img class="print-demo-poster" src="assets/demos/fd_episode471_poster.jpg" alt="FD episode 471 demo poster">
+          <div class="demo-meta">
+            <span><b>FD demo · episode 471</b><br>163 frames · 640×480 · 25 fps · 6.52 s</span>
+            <a href="assets/demos/fd_episode471.mp4" target="_blank" download>直接打开 / 下载 MP4 ↗</a>
+          </div>
+        </div>
+        <div class="gap-list">
+          <div><b>01 · APPEARANCE</b><span>窗口间生成帧作为下一条件，纹理偏差会被继续继承。</span></div>
+          <div><b>02 · CONTACT</b><span>末端与物体接触是动力学不连续点，也是漂移最易放大的位置。</span></div>
+          <div><b>03 · OCCLUSION</b><span>遮挡后对象与机械臂几何需要由模型重新推断，而非由 action 直接指定。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene dark" id="handoff" data-index="08 — HANDOFF">
+      <div class="finale">
+        <div>
+          <p class="eyebrow" data-animate>WorldArena submission handoff</p>
+          <h2 data-animate="delay-1">从模型输出到<br><span>可提交 episode</span></h2>
+          <p class="lede" data-animate="delay-2">AR 输出按 episode 完整性检查、重命名并打包；Track 1 的最终对象不是 latent 或窗口，而是一集一个、长度严格对应 trajectory 的 mp4。</p>
+        </div>
+        <div data-animate="delay-2">
+          <div class="deliverable"><b>AR outputs</b><span>每个 episode 一个 exact-T 生成视频</span></div>
+          <div class="deliverable"><b>Completeness</b><span>核对 1000 条轨迹、缺失与重复文件</span></div>
+          <div class="deliverable"><b>Package</b><span>submission 目录 → tar.gz → Hugging Face Dataset</span></div>
+          <div class="deliverable"><b>Metrics</b><span>nDTW trajectory · VLM judgment · JEPA · aggregate EWM</span></div>
+          <p class="source">WA/assets/TRACK1_HF_SUBMISSION_GUIDELINE_CN.md:24-48,64-195 · WA/tools/pack_track1_submission.py:180-240</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="route_explainer.js"></script>
+</body>
+</html>
