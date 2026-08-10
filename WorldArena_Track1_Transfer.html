@@ -155,13 +155,13 @@
       <div class="copy">
         <p class="eyebrow" data-animate>Synchronized training pair</p>
         <h2 data-animate="delay-1">同一时刻，<br>两种<span style="color:var(--accent-2)">视觉表达</span></h2>
-        <p data-animate="delay-2">Control 与 target 使用同一帧索引同步解码，并通过相同的 resize-to-cover 和 center crop。97 个 RGB frame 经共享 Wan2.2 VAE 变成 25 个对齐 latent time steps。</p>
+        <p data-animate="delay-2">Control 与 target 使用同一帧索引同步编码，并通过相同的 resize-to-cover 和 center crop。97 个 RGB frame 经共享 Wan2.2 VAE 变成 25 个对齐 latent time steps。</p>
         <div class="metrics" data-animate="delay-2">
           <div class="metric"><b>97 → 25</b><span>RGB to latent frames</span></div>
           <div class="metric"><b>4:3</b><span>480 tier geometry</span></div>
           <div class="metric"><b>2 / rank</b><span>paired samples under FSDP</span></div>
         </div>
-        <p class="takeaway" data-animate="delay-3">对齐误差会直接变成 supervision conflict：控制符号说“这里”，真实视频却在另一个时间或像素位置。</p>
+
         <p class="source">robotwin_transfer_dataset.py:288-339 · transfer_control_transform.py:124-195 · utils.py:41-54</p>
       </div>
       <div class="figure" data-animate="delay-1">
