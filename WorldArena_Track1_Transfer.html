@@ -245,8 +245,6 @@
         <h2 data-animate="delay-1">Control 全 clean，<br>loss 只属于<span style="color:var(--accent-2)"> target future</span></h2>
         <p data-animate="delay-2">Text query 只读取 causal text；control 与 target 作为 generation query 可读取完整的 text/control/target context。Condition mask 中 1 表示 clean，flow loss 使用其补集。</p>
         <p data-animate="delay-2">训练存在 10% caption dropout，但没有显式 control-item dropout；无 control 分支是在推理期为 control-CFG 构造。</p>
-        <p class="takeaway" data-animate="delay-3">模型不会重建 control。它只把 control 当作时空参照，预测 target noisy future 的速度。</p>
-        <p class="source">attention.py:88-145 · rectified_flow.py:176-210 · flow_matching.py:18-90 · transfer_transforms.py:53-93</p>
       </div>
       <div class="figure" data-animate="delay-1">
         <span class="figure-label">Figure 05 · attention matrix + loss mask</span>
